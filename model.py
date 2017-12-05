@@ -38,8 +38,9 @@ def get_model(x, keep_prob):
 		pool = pooling_layer(conv)
 
 	with tf.variable_scope('dropout'):
-		total_nodes = ((EXAMPLE_WIDTH - CONV_FILTER_SIZE) / POOLING_SIZE) * NUM_CONV_FILTERS # 900
-		pool_flat = tf.reshape(pool, [-1, total_nodes])
+		# We multiply by 5 because of the 5 features. Seems like OG paper doesn't do this?
+		total_nodes = ((EXAMPLE_WIDTH - CONV_FILTER_SIZE) / POOLING_SIZE) * NUM_CONV_FILTERS * 5
+		pool_flat = tf.reshape(pool, [1, total_nodes])
 
 		dropout_layer = tf.nn.dropout(pool_flat, keep_prob)
 
@@ -54,7 +55,8 @@ def get_model(x, keep_prob):
 		second_fc_layer = tf.nn.relu(tf.matmul(first_fc_layer, second_fc_weights) + second_fc_biases)
 
 	with tf.variable_scope('readout'):
-		readout_weights = weight_variables([SECOND_FC_LAYER_NODE_COUNT, 1])
+		# 2 outputs (mutually exclusive classification).
+		readout_weights = weight_variables([SECOND_FC_LAYER_NODE_COUNT, 2])
 		readout_biases = bias_variables([1])
 		readout = tf.matmul(second_fc_layer, readout_weights) + readout_biases
 
