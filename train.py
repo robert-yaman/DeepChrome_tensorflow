@@ -18,7 +18,7 @@ def main(argv=None):
 		logits=readout))
 	training_step = tf.train.AdamOptimizer(1e-4).minimize(loss)
 
-# is this right? maybe we just look at the greater one
+	# This seems wrong - we are analyzing as if both labels could be true.
 	auc, auc_update = tf.contrib.metrics.streaming_auc(predictions=softmax, 
 		labels=y, curve='ROC')
 

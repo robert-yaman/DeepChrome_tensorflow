@@ -2,12 +2,16 @@ import tensorflow as tf
 
 TRAINING_DATA_FILE = "./toy_data/train.csv"
 VALIDATION_DATA_FILE = "./toy_data/validate.csv"
+TEST_DATA_FILE = "./toy_data/test.csv"
 
 def get_training_data():
 	return _get(TRAINING_DATA_FILE)
 
 def get_validation_data():
 	return _get(VALIDATION_DATA_FILE)
+
+def get_test_data():
+	return _get(TEST_DATA_FILE)
 
 def _get(filename):
 	def decode_line(line):
