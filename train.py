@@ -16,6 +16,7 @@ def main(argv=None):
 
 	loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y, 
 		logits=readout))
+	tf.summary.scalar('loss', loss)
 	training_step = tf.train.AdamOptimizer(1e-4).minimize(loss)
 
 	# This seems wrong - we are analyzing as if both labels could be true.
@@ -37,6 +38,7 @@ def main(argv=None):
 			    ex, label = sess.run(next_element)
 			    _, s = sess.run([training_step, summary], 
 			    	feed_dict={x: ex, y: label, keep_prob: 0.5})
+			    # Log every step for now
 			    summary_writer.add_summary(s, step)
 			except tf.errors.OutOfRangeError:
 			    print("DONE TRAINING")
