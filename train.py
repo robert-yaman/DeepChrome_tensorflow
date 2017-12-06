@@ -22,8 +22,12 @@ def main(argv=None):
 	auc, auc_update = tf.contrib.metrics.streaming_auc(predictions=softmax, 
 		labels=y, curve='ROC')
 
+	summary = tf.summary.merge_all()
 	with tf.Session() as sess:
 		print "BEGINNING TRANING..."
+		tb_path = '/tmp/tensorboard/'
+		summary_writer = tf.summary.FileWriter(tb_path, sess.graph)
+
 		sess.run(tf.global_variables_initializer())
 		step = 0
 		while True:
@@ -31,7 +35,9 @@ def main(argv=None):
 			    step += 1
 			    print step
 			    ex, label = sess.run(next_element)
-			    sess.run(training_step, feed_dict={x: ex, y: label, keep_prob: 0.5})
+			    _, s = sess.run([training_step, summary], 
+			    	feed_dict={x: ex, y: label, keep_prob: 0.5})
+			    summary_writer.add_summary(s, step)
 			except tf.errors.OutOfRangeError:
 			    print("DONE TRAINING")
 			    break
