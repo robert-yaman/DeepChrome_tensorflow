@@ -56,6 +56,7 @@ def get_model(x, keep_prob):
 
 	with tf.variable_scope('dropout'):
 		# We multiply by 5 because of the 5 features. Seems like OG paper doesn't do this?
+			# TODO I have the convolutions wrong - should apply across all of the modifications
 		total_nodes = ((EXAMPLE_WIDTH - CONV_FILTER_SIZE) / POOLING_SIZE) * NUM_CONV_FILTERS * 5
 		pool_flat = tf.reshape(pool, [1, total_nodes])
 

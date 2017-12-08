@@ -17,7 +17,8 @@ def main(argv=None):
 	loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y, 
 		logits=readout))
 	tf.summary.scalar('loss', loss)
-	training_step = tf.train.AdamOptimizer(1e-4).minimize(loss)
+	# Try Adam optimizer?
+	training_step = tf.train.GradientDescentOptimizer(1e-3).minimize(loss)
 
 	# This seems wrong - we are analyzing as if both labels could be true.
 	auc, auc_update = tf.contrib.metrics.streaming_auc(predictions=softmax, 
