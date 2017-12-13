@@ -26,6 +26,7 @@ def _get(filename):
 	base_dataset = tf.contrib.data.TextLineDataset(filename)
 	tr_data = base_dataset.map(decode_line).batch(100).map(squash_labels)
 	iterator = tr_data.make_one_shot_iterator()
+	## Shuffle?
 	next_element = iterator.get_next()
 
 	return next_element
