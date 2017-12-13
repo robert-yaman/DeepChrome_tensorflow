@@ -34,30 +34,24 @@ def get_model(x, keep_prob):
 				initializer=tf.constant_initializer(0.1))
 			_variable_summaries(variables)
 			return variables
-	def conv_layer(inputs, filter_shape):
-		with tf.name_scope('conv'):
-			return tf.nn.conv1d(inputs, filter_shape, stride=1,
-					padding='VALID')
-	def pooling_layer(inputs):
-		with tf.name_scope('pool'):
-			return tf.nn.pool(inputs, window_shape=[POOLING_SIZE], pooling_type='MAX',
-					padding='VALID', strides=[POOLING_SIZE])
+
 	with tf.name_scope('initialize'):
-	    # Add a dimension to the input for convolutional channels.
-		 example = tf.expand_dims(tf.transpose(x), [-1])
+	    # Add a |batch| anc |channel| dimension for convolution.
+	    ## TODO: double check tf.transpose is what we want.
+		example = tf.expand_dims(tf.transpose(x), [-1])
+		example_4d = tf.expand_dims(example, [0])
 
 	with tf.variable_scope('conv'):
-		# 1-D convolution + pooling
-		conv_weights = weight_variables([CONV_FILTER_SIZE, 1, NUM_CONV_FILTERS])
+		conv_weights = weight_variables([5, CONV_FILTER_SIZE, 1, NUM_CONV_FILTERS])
 		conv_biases = bias_variables([NUM_CONV_FILTERS])
 
-		conv = tf.nn.relu(conv_layer(example, conv_weights) + conv_biases)
-		pool = pooling_layer(conv)
+		conv = tf.nn.conv2d(example_4d, conv_weights, strides=[1,1,1,1] ,padding='VALID')
+		conv_relu = tf.nn.relu(conv + conv_biases)
+		pool = tf.nn.pool(conv_relu, window_shape=[1,POOLING_SIZE], 
+			pooling_type='MAX', padding='VALID', strides=[1,POOLING_SIZE])
 
 	with tf.variable_scope('dropout'):
-		# We multiply by 5 because of the 5 features. Seems like OG paper doesn't do this?
-			# TODO I have the convolutions wrong - should apply across all of the modifications
-		total_nodes = ((EXAMPLE_WIDTH - CONV_FILTER_SIZE) / POOLING_SIZE) * NUM_CONV_FILTERS * 5
+		total_nodes = ((EXAMPLE_WIDTH - CONV_FILTER_SIZE) / POOLING_SIZE) * NUM_CONV_FILTERS
 		pool_flat = tf.reshape(pool, [1, total_nodes])
 
 		dropout_layer = tf.nn.dropout(pool_flat, keep_prob)
