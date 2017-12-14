@@ -73,6 +73,8 @@ ensembl_server = "http://rest.ensembl.org"
 ext_pre = "/lookup/id/"
 ext_post = "?expand=1"
 deprecated_genes = []
+
+# 5 hours
 with open(BED_PATH, "w+") as bed_file:
 	for gene in all_genes:
 		request_url = ensembl_server + ext_pre + gene + ext_post
@@ -99,7 +101,7 @@ with open(BED_PATH, "w+") as bed_file:
 			])
 			new_example.append(newline)
 			count += 1
-		bed_file.write("\n".join(new_example))
+		bed_file.write("\n".join(new_example) + "\n")
 
 
 print "Done. Time elapsed: " + _time_elapsed()
@@ -118,18 +120,22 @@ for epigenome in all_epigenomes:
 		filename_gz = filename + ".gz"
 		print " -- Downloading " + filename + "..."
 		url = BASE_TAGALIGN_URL + filename_gz
-		response = urllib2.urlopen(url)
-		compressed_tagalign = StringIO.StringIO()
-		compressed_tagalign.write(response.read())
-		compressed_tagalign.seek(0)
-		print " -- writing..."
-		with open(TAGALIGN_DIR + filename + ".gz", "w") as gz_file:
-			gz_file.write(compressed_tagalign.read())
+		try:
+			response = urllib2.urlopen(url)
+			compressed_tagalign = StringIO.StringIO()
+			compressed_tagalign.write(response.read())
+			compressed_tagalign.seek(0)
+			print " -- writing..."
+			with open(TAGALIGN_DIR + filename + ".gz", "w") as gz_file:
+				gz_file.write(compressed_tagalign.read())
 
-		cmd = "gunzip " + TAGALIGN_DIR + filename
-		subprocess.Popen(cmd.split())
+			cmd = "gunzip " + TAGALIGN_DIR + filename
+			subprocess.Popen(cmd.split())
+		except:
+			print "ERROR: unable to download + " + filename_gz
+			continue
 
-shutil.rmtree(TAGALIGN_DIR)
+## shutil.rmtree(TAGALIGN_DIR)
 
 print "Done. Time elapsed: " + _time_elapsed()
 print "Processing tagalign files..."

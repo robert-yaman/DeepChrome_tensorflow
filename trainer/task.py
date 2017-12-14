@@ -1,11 +1,12 @@
+import argparse
 import tensorflow as tf
 
 import data
 import model
 
-def main(argv=None):
-	next_element = data.get_training_data()
-	next_validation_element = data.get_validation_data()
+def main(args):
+	next_element = data.get_data(args.train_files)
+	next_validation_element = data.get_data(args.eval_files)
 
 	x = tf.placeholder(tf.float32, [100,5])
 	y = tf.placeholder(tf.float32)
@@ -27,8 +28,7 @@ def main(argv=None):
 	summary = tf.summary.merge_all()
 	with tf.Session() as sess:
 		print "BEGINNING TRANING..."
-		tb_path = '/tmp/tensorboard/'
-		summary_writer = tf.summary.FileWriter(tb_path, sess.graph)
+		summary_writer = tf.summary.FileWriter(args.job_dir, sess.graph)
 
 		sess.run(tf.global_variables_initializer())
 		step = 0
@@ -61,4 +61,24 @@ def main(argv=None):
 		print ending_auc
 
 if __name__ == "__main__":
-	main()
+	parser = argparse.ArgumentParser()
+	# Input Arguments
+	parser.add_argument(
+		'--train-files',
+		help='GCS or local paths to training data',
+		nargs='+',
+		required=True
+	)
+	parser.add_argument(
+		'--eval-files',
+		help='GCS or local paths to evaluation data',
+		nargs='+',
+		required=True
+	)
+	parser.add_argument(
+		'--job-dir',
+		help='GCS location to write checkpoints, tensorboard, and models',
+		required=True
+	)
+
+	main(parser.parse_args())
