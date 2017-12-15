@@ -74,7 +74,6 @@ ext_pre = "/lookup/id/"
 ext_post = "?expand=1"
 deprecated_genes = []
 
-# 5 hours
 with open(BED_PATH, "w+") as bed_file:
 	for gene in all_genes:
 		request_url = ensembl_server + ext_pre + gene + ext_post
@@ -92,7 +91,7 @@ with open(BED_PATH, "w+") as bed_file:
 		end_area = int(response["start"]) + 5000 # check if too long?
 		count = 0
 		new_example = []
-		for i in range(start_area, end_area + 1, 100):
+		for i in range(start_area, end_area, 100):
 			newline = "\t".join([
 				"chr" + response["seq_region_name"],
 				str(i),
@@ -103,16 +102,13 @@ with open(BED_PATH, "w+") as bed_file:
 			count += 1
 		bed_file.write("\n".join(new_example) + "\n")
 
-
 print "Done. Time elapsed: " + _time_elapsed()
 print "Downloading tagalign files..."
-
-# TODO: parallelize this if it's slow.
 
 BASE_TAGALIGN_URL = "http://egg2.wustl.edu/roadmap/data/byFileType/alignments/consolidated/"
 MODIFICATIONS = ["H3K4me3", "H3K4me1", "H3K36me3", "H3K9me3", "H3K27me3"]
 TAGALIGN_DIR = DATA_DIR + "tmp_tagalign/"
-
+"""
 os.makedirs(TAGALIGN_DIR)
 for epigenome in all_epigenomes:
 	for modification in MODIFICATIONS:
@@ -134,14 +130,12 @@ for epigenome in all_epigenomes:
 		except:
 			print "ERROR: unable to download + " + filename_gz
 			continue
-
-## shutil.rmtree(TAGALIGN_DIR)
-
+"""
 print "Done. Time elapsed: " + _time_elapsed()
 print "Processing tagalign files..."
 
 BAM_DIR = DATA_DIR + "tmp_bam/"
-
+"""
 os.makedirs(BAM_DIR)
 for filename in os.listdir(TAGALIGN_DIR):
 	if not filename.endswith(".tagAlign"):
@@ -156,83 +150,80 @@ for filename in os.listdir(TAGALIGN_DIR):
 	cmd = "samtools index " + bam_path
 	subprocess.Popen(cmd.split())
 	# The docs say we should sort the bam file, but multicov seems to work without this.
+"""
 
 print "Done. Time elapsed: " + _time_elapsed()
-print "Creating temp column files..."
-
-COLUMN_DIR = DATA_DIR + "tmp_cols/"
-
-os.makedirs(COLUMN_DIR)
-
-# Temporary files to hold the columns of the dataset.
-# Takes about five minutes per.
-for filename in os.listdir(BAM_DIR):
-	if not filename.endswith(".bam"):
-		continue
-	print " -- Processing " + filename
-	bam_path = BAM_DIR + filename.split(".")[0] + ".bam"
-	column_path_no_ext = filename.split(".")[0]
-	column_path = filename.split(".")[0] + ".txt"
-	cmd = "bedtools multicov -bams " + bam_path + " -bed " + BED_PATH
-	output, error = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE).communicate()
-	for line in output.split("\n"):
-		if len(line.split("\n")) < 2:
-			continue
-		path = COLUMN_DIR + column_path_no_ext + "-" + line.split("\t")[-2] + ".txt" # gene name
-		with open(path, "a") as column_file:
-			val = line.split("\t")[-1]
-			column_file.write(val + "\n")
-
-print "Done. Time elapsed: " + _time_elapsed()
-print "Creating csvs..."
-
-os.remove(BED_PATH)	
-shutil.rmtree(BAM_DIR)
+print "Creating CSVs..."
 
 num_genes_per_dataset = len(all_genes) / 3
 training_genes = all_genes[0 : num_genes_per_dataset]
 validation_genes = all_genes[num_genes_per_dataset + 1 : num_genes_per_dataset * 2]
 testing_genes = all_genes[num_genes_per_dataset * 2 + 1:]
 
-total_count = 0
-for gene in all_genes:
-	for epigenome in all_epigenomes:
-		paths = [COLUMN_DIR + epigenome + "-" + modification + "-" + gene + ".txt" 
-			for modification in MODIFICATIONS]
-
-		if not all([os.path.isfile(path) for path in paths]):
-			if not gene in deprecated_genes:
-				print "ERROR: Skipping non-deprecated gene: " + gene
+# Order the bams lexicographically by epigenome, then modification.
+ordered_bams = []
+for epigenome in all_epigenomes:
+	for modification in MODIFICATIONS:
+		path = BAM_DIR + epigenome + "-" + modification + ".bam"
+		if not os.path.isfile(path):
+			print " -- No bam file: " + path
 			continue
-		# 5 paths - 1 for each modification.
-		for i in range(sum(1 for line in open(paths[0])) - 1):
-			epigenome_index = all_epigenomes.index(epigenome)
-			gene_index = all_genes.index(gene)
+		ordered_bams.append(path)
 
-			line = ",".join([str(n).rstrip() for n in [
-				total_count,
-				i % 100, # Spot in example,
-				linecache.getline(paths[0], i + 1),
-				linecache.getline(paths[1], i + 1),
-				linecache.getline(paths[2], i + 1),
-				linecache.getline(paths[3], i + 1),
-				linecache.getline(paths[4], i + 1),
-				expression_matrix[gene_index][epigenome_index], # label
-			]]) + "\n"
-			if gene in training_genes:
-				with open(DATA_DIR + "data/training_data.csv", "a") as training_file:
-					training_file.write(line)
-			elif gene in validation_genes:
-				with open(DATA_DIR + "data/validation_data.csv", "a") as validation_file:
-					validation_file.write(line)
-			elif gene in testing_genes:
-				with open(DATA_DIR + "data/testing_data.csv", "a") as testing_file:
-					testing_file.write(line)
-			else:
-				print "ERROR with gene: " + gene + "\n -- epigenome: " + epigenome
-		total_count += 1
+cmd = "bedtools multicov -bams " + " ".join(ordered_bams) + " -bed " + BED_PATH
+output, error = subprocess.Popen(cmd.split(), 
+	stdout=subprocess.PIPE).communicate()
+output_matrix = [line.split("\t") for line in output.split("\n")]
+# Last element is empty line
+output_matrix.pop()
 
-shutil.rmtree(COLUMN_DIR)
+total_count = 0
+for i in range(len(output_matrix) / 100):
+	section = output_matrix[i * 100 : i * 100 + 100]
+
+	if not all([len(s) == len(section[0]) for s in section]):
+		print "ERROR: multicov partition has different lengths"
+		sys.exit()
+
+	gene_array = [j[3] for j in section]
+	if not all([gene == gene_array[0] for gene in gene_array]):
+		print("ERROR: multicov partition has different genes: " + 
+			str(gene_array))
+		sys.exit()
+	gene = gene_array[0]
+
+	csv_lines = []
+	for j in range(4, len(section[0]), 5):
+		epigenome_index = (j - 4) / 5
+		gene_index = all_genes.index(gene)
+
+		example = [row[j : j + 5] for row in section]
+		label = expression_matrix[gene_index][epigenome_index]
+		example_lines = ""
+		for row in example:
+			example_lines += str(total_count / 100) + ","
+			example_lines += str(total_count % 100) + ","
+			example_lines += ",".join(row)
+			example_lines += "," + str(label) + "\n"
+			total_count += 1
+		csv_lines.append(example_lines.rstrip())
+
+	if gene in training_genes:
+		csv_dir = DATA_DIR + "data/training_data.csv"
+	elif gene in validation_genes:
+		csv_dir = DATA_DIR + "data/validation_data.csv"
+	elif gene in testing_genes:
+		csv_dir = DATA_DIR + "data/testing_data.csv"
+
+	with open(csv_dir, "a") as csv_file:
+		csv_file.write("\n".join(csv_lines) + "\n")
+
+print "Done. Time elapsed: " + _time_elapsed()
+print "Cleaning up..."
+
+os.remove(BED_PATH)	
+shutil.rmtree(TAGALIGN_DIR)
+shutil.rmtree(BAM_DIR)
 
 print "Done. Total time elapsed: " + _time_elapsed()
 
