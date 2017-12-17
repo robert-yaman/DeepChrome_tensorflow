@@ -5,7 +5,8 @@ def get_data(filepath):
 		items = tf.decode_csv(line, [[0]]*8)
 		return items[2:7], items[7]
 	def squash_labels(matrix, labels):
-		# labels should be a homogenous (100,1) tensor. We turn it into a [2] classification.
+		# labels should be a homogenous (100,1) tensor. We turn it into a [2]
+		# classification.
 		is_ones = tf.reduce_min(labels)
 		is_zeros = tf.constant(1) - is_ones
 		return matrix, tf.stack([is_ones, is_zeros])

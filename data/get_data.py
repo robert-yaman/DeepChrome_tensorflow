@@ -1,10 +1,9 @@
 """
-Script for generating a complete dataset. The second argument is the location to store 
-the dataset (very big).
+Script for generating a complete dataset. Takes a long time!
 """
 
+import argparse
 import gzip
-import linecache
 import os
 import requests
 import time
@@ -15,7 +14,25 @@ import subprocess
 import urllib2
 import sys
 
-DATA_DIR = sys.argv[1] if len(sys.argv) > 1 else "./"
+parser = argparse.ArgumentParser()
+# Input Arguments
+parser.add_argument(
+	'--data-dir',
+	help='Must contain a hg19chrom.sizes file, and a data/ directory for output csvs. ./ if unspecified',
+)
+parser.add_argument(
+	'--rpkm',
+	help='Local path for rpkm file. Used for testing.',
+)
+parser.add_argument(
+	'--provide-tagaligns',
+	help='The tmp_tagalign folder will be manually created. Used for testing',
+	action='store_true'
+)
+
+args = parser.parse_args()
+
+DATA_DIR = args.data_dir if len(sys.argv) > 1 else "./"
 if not os.path.isdir("./data"):
 	print "Please run from the root directory."
 	sys.exit()
@@ -27,11 +44,14 @@ def _time_elapsed():
 RPKM_URL = "http://egg2.wustl.edu/roadmap/data/byDataType/rna/expression/57epigenomes.RPKM.pc.gz"
 
 print "Downloading RPKM file..."
-response = urllib2.urlopen(RPKM_URL)
-compressedFile = StringIO.StringIO()
-compressedFile.write(response.read())
-compressedFile.seek(0)
-decompressedFile = gzip.GzipFile(fileobj=compressedFile, mode='rb')
+if len(args.rpkm) > 0:
+	decompressedFile = open(args.rpkm)
+else:
+	response = urllib2.urlopen(RPKM_URL)
+	compressedFile = StringIO.StringIO()
+	compressedFile.write(response.read())
+	compressedFile.seek(0)
+	decompressedFile = gzip.GzipFile(fileobj=compressedFile, mode='rb')
 
 print "Done. Time elapsed: " + _time_elapsed()
 print "Processing RPKM..."
@@ -59,9 +79,7 @@ for j in range(len(expression_matrix[0])):
 	for i in range(len(expression_matrix)):
 		expression_matrix[i][j] = 1 if expression_matrix[i][j] > median else 0
 
-del response
 del decompressedFile
-del compressedFile
 del lines
 
 print "Done. Time elapsed: " + _time_elapsed()
@@ -83,7 +101,7 @@ with open(BED_PATH, "w+") as bed_file:
 			# Some genes are deprecated. We ignore for now.
 			# TODO: Confirm we can skip these.
 			print " -- Skipping gene: " + gene
-			deprecated_genes.append(deprecated_genes)
+			deprecated_genes.append(gene)
 			continue
 		response = request.json()
 		# We are interested in the area +- 5000 BP from TSS of start.
@@ -108,57 +126,58 @@ print "Downloading tagalign files..."
 BASE_TAGALIGN_URL = "http://egg2.wustl.edu/roadmap/data/byFileType/alignments/consolidated/"
 MODIFICATIONS = ["H3K4me3", "H3K4me1", "H3K36me3", "H3K9me3", "H3K27me3"]
 TAGALIGN_DIR = DATA_DIR + "tmp_tagalign/"
-"""
-os.makedirs(TAGALIGN_DIR)
-for epigenome in all_epigenomes:
-	for modification in MODIFICATIONS:
-		filename = epigenome + "-" + modification + ".tagAlign"
-		filename_gz = filename + ".gz"
-		print " -- Downloading " + filename + "..."
-		url = BASE_TAGALIGN_URL + filename_gz
-		try:
-			response = urllib2.urlopen(url)
-			compressed_tagalign = StringIO.StringIO()
-			compressed_tagalign.write(response.read())
-			compressed_tagalign.seek(0)
-			print " -- writing..."
-			with open(TAGALIGN_DIR + filename + ".gz", "w") as gz_file:
-				gz_file.write(compressed_tagalign.read())
 
-			cmd = "gunzip " + TAGALIGN_DIR + filename
-			subprocess.Popen(cmd.split())
-		except:
-			print "ERROR: unable to download + " + filename_gz
-			continue
-"""
+if not args.provide_tagaligns:
+	os.makedirs(TAGALIGN_DIR)
+	for epigenome in all_epigenomes:
+		for modification in MODIFICATIONS:
+			filename = epigenome + "-" + modification + ".tagAlign"
+			filename_gz = filename + ".gz"
+			print " -- Downloading " + filename + "..."
+			url = BASE_TAGALIGN_URL + filename_gz
+			try:
+				response = urllib2.urlopen(url)
+				compressed_tagalign = StringIO.StringIO()
+				compressed_tagalign.write(response.read())
+				compressed_tagalign.seek(0)
+				print " -- writing..."
+				with open(TAGALIGN_DIR + filename + ".gz", "w") as gz_file:
+					gz_file.write(compressed_tagalign.read())
+
+				cmd = "gunzip " + TAGALIGN_DIR + filename
+				subprocess.Popen(cmd.split())
+			except:
+				print "ERROR: unable to download + " + filename_gz
+				continue
+
 print "Done. Time elapsed: " + _time_elapsed()
 print "Processing tagalign files..."
 
 BAM_DIR = DATA_DIR + "tmp_bam/"
-"""
+
 os.makedirs(BAM_DIR)
 for filename in os.listdir(TAGALIGN_DIR):
 	if not filename.endswith(".tagAlign"):
 		continue
 	print " -- Processing " + filename
 	bam_path = BAM_DIR + filename.split(".")[0] + ".bam"
-	cmd = "bedtools bedtobam -i " + TAGALIGN_DIR + filename + " -g data/hg19chrom.sizes"
+	cmd = "bedtools bedtobam -i " + TAGALIGN_DIR + filename + " -g hg19chrom.sizes"
 	output, error = subprocess.Popen(cmd.split(), stdout=subprocess.PIPE).communicate()
 	with open(bam_path, "w") as bam_file:
 		bam_file.write(output)
 
 	cmd = "samtools index " + bam_path
 	subprocess.Popen(cmd.split())
-	# The docs say we should sort the bam file, but multicov seems to work without this.
-"""
+	# The docs say we should sort the bam file, but multicov seems to work 
+	# without this.
 
 print "Done. Time elapsed: " + _time_elapsed()
 print "Creating CSVs..."
 
 num_genes_per_dataset = len(all_genes) / 3
 training_genes = all_genes[0 : num_genes_per_dataset]
-validation_genes = all_genes[num_genes_per_dataset + 1 : num_genes_per_dataset * 2]
-testing_genes = all_genes[num_genes_per_dataset * 2 + 1:]
+validation_genes = all_genes[num_genes_per_dataset: num_genes_per_dataset * 2]
+testing_genes = all_genes[num_genes_per_dataset * 2:]
 
 # Order the bams lexicographically by epigenome, then modification.
 ordered_bams = []
@@ -170,65 +189,75 @@ for epigenome in all_epigenomes:
 			continue
 		ordered_bams.append(path)
 
-cmd = "bedtools multicov -bams " + " ".join(ordered_bams) + " -bed " + BED_PATH
-output, error = subprocess.Popen(cmd.split(), 
-	stdout=subprocess.PIPE).communicate()
-output_matrix = [line.split("\t") for line in output.split("\n")]
-# Last element is empty line
-output_matrix.pop()
+def process(bams):
+	cmd = "bedtools multicov -bams " + " ".join(bams) + " -bed " + BED_PATH
 
-total_count = 0
-for i in range(len(output_matrix) / 100):
-	section = output_matrix[i * 100 : i * 100 + 100]
+	output, error = subprocess.Popen(cmd.split(), 
+		stdout=subprocess.PIPE).communicate()
+	output_matrix = [line.split("\t") for line in output.split("\n")]
+	# Last element is empty line
+	output_matrix.pop()
 
-	if not all([len(s) == len(section[0]) for s in section]):
-		print "ERROR: multicov partition has different lengths"
-		sys.exit()
+	print " ---- multicov complete. Adding to csvs"
+	total_count = 0
+	for i in range(len(output_matrix) / 100):
+		section = output_matrix[i * 100 : i * 100 + 100]
 
-	gene_array = [j[3] for j in section]
-	if not all([gene == gene_array[0] for gene in gene_array]):
-		print("ERROR: multicov partition has different genes: " + 
-			str(gene_array))
-		sys.exit()
-	gene = gene_array[0]
+		if not all([len(s) == len(section[0]) for s in section]):
+			print "ERROR: multicov partition has different lengths"
+			sys.exit()
 
-	csv_lines = []
-	for j in range(4, len(section[0]), 5):
-		epigenome_index = (j - 4) / 5
-		gene_index = all_genes.index(gene)
+		gene_array = [j[3] for j in section]
+		if not all([gene == gene_array[0] for gene in gene_array]):
+			print("ERROR: multicov partition has different genes: " + 
+				str(gene_array))
+			sys.exit()
+		gene = gene_array[0]
 
-		example = [row[j : j + 5] for row in section]
-		label = expression_matrix[gene_index][epigenome_index]
-		example_lines = ""
-		for row in example:
-			example_lines += str(total_count / 100) + ","
-			example_lines += str(total_count % 100) + ","
-			example_lines += ",".join(row)
-			example_lines += "," + str(label) + "\n"
-			total_count += 1
-		csv_lines.append(example_lines.rstrip())
+		csv_lines = []
+		for j in range(4, len(section[0]), 5):
+			epigenome_index = (j - 4) / 5
+			gene_index = all_genes.index(gene)
 
-	if gene in training_genes:
-		csv_dir = DATA_DIR + "data/training_data.csv"
-	elif gene in validation_genes:
-		csv_dir = DATA_DIR + "data/validation_data.csv"
-	elif gene in testing_genes:
-		csv_dir = DATA_DIR + "data/testing_data.csv"
+			example = [row[j : j + 5] for row in section]
+			label = expression_matrix[gene_index][epigenome_index]
+			example_lines = ""
+			for row in example:
+				example_lines += str(total_count / 100) + ","
+				example_lines += str(total_count % 100) + ","
+				example_lines += ",".join(row)
+				example_lines += "," + str(label) + "\n"
+				total_count += 1
+			csv_lines.append(example_lines.rstrip())
 
-	with open(csv_dir, "a") as csv_file:
-		csv_file.write("\n".join(csv_lines) + "\n")
+		if gene in training_genes:
+			csv_dir = DATA_DIR + "data/training_data.csv"
+		elif gene in validation_genes:
+			csv_dir = DATA_DIR + "data/validation_data.csv"
+		elif gene in testing_genes:
+			csv_dir = DATA_DIR + "data/testing_data.csv"
+
+		with open(csv_dir, "a") as csv_file:
+			csv_file.write("\n".join(csv_lines) + "\n")
+
+if args.provide_tagaligns:
+	# We assume that provided tagaligns are few enough to process all at once.
+	process(ordered_bams)
+else:
+	# Process bams in four chunks to not overload multicov.
+	quarter_length = len(ordered_bams) / 4
+	if not len(ordered_bams) % 4 == 0:
+		print "ERROR: leaving out some bams."
+	for i in range(4):
+		bams = ordered_bams[i * quarter_length : i * quarter_length + quarter_length]
+		print " -- quarter_length: " + str(i)
+		process(bams)
 
 print "Done. Time elapsed: " + _time_elapsed()
 print "Cleaning up..."
 
-os.remove(BED_PATH)	
-shutil.rmtree(TAGALIGN_DIR)
-shutil.rmtree(BAM_DIR)
+# os.remove(BED_PATH)	
+# shutil.rmtree(TAGALIGN_DIR)
+# shutil.rmtree(BAM_DIR)
 
 print "Done. Total time elapsed: " + _time_elapsed()
-
-
-
-
-
-

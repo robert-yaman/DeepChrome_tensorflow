@@ -17,8 +17,8 @@ python data/get_data.py path/to/data
 To train the model:
 ```
 python trainer/task.py \
---train-files path/to/training/data
---eval-files path/to/validation/data
+--train-files path/to/training/data \
+--eval-files path/to/validation/data \
 --job-dir path/for/model/and/tensorboard
 ```
 This script will use data from the provided paths, and put all output in the job-dir path.
