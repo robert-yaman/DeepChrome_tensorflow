@@ -1,9 +1,8 @@
-"""
-Script for generating a complete dataset. Takes a long time!
-"""
+# Script for generating a complete dataset. Takes a long time!
 
 import argparse
 import gzip
+import multiprocessesing as mult
 import os
 import requests
 import time
@@ -18,7 +17,7 @@ parser = argparse.ArgumentParser()
 # Input Arguments
 parser.add_argument(
 	'--data-dir',
-	help='Must contain a hg19chrom.sizes file, and a data/ directory for output csvs. ./ if unspecified',
+	help='Must contain a data/ directory for output csvs. ./ if unspecified',
 )
 parser.add_argument(
 	'--rpkm',
@@ -33,6 +32,9 @@ parser.add_argument(
 args = parser.parse_args()
 
 DATA_DIR = args.data_dir if len(sys.argv) > 1 else "./"
+if not DATA_DIR.endswith("/"):
+	DATA_DIR = DATA_DIR + "/"
+
 if not os.path.isdir("./data"):
 	print "Please run from the root directory."
 	sys.exit()
@@ -44,14 +46,14 @@ def _time_elapsed():
 RPKM_URL = "http://egg2.wustl.edu/roadmap/data/byDataType/rna/expression/57epigenomes.RPKM.pc.gz"
 
 print "Downloading RPKM file..."
-if len(args.rpkm) > 0:
-	decompressedFile = open(args.rpkm)
-else:
+if args.rpkm == None:	
 	response = urllib2.urlopen(RPKM_URL)
 	compressedFile = StringIO.StringIO()
 	compressedFile.write(response.read())
 	compressedFile.seek(0)
 	decompressedFile = gzip.GzipFile(fileobj=compressedFile, mode='rb')
+else:
+	decompressedFile = open(args.rpkm)
 
 print "Done. Time elapsed: " + _time_elapsed()
 print "Processing RPKM..."
@@ -172,7 +174,10 @@ for filename in os.listdir(TAGALIGN_DIR):
 	# without this.
 
 print "Done. Time elapsed: " + _time_elapsed()
-print "Creating CSVs..."
+print "Creating intermediary CSVs..."
+
+CSV_DIR = DATA_DIR + "tmp_csvs/"
+os.makedirs(CSV_DIR)
 
 num_genes_per_dataset = len(all_genes) / 3
 training_genes = all_genes[0 : num_genes_per_dataset]
@@ -189,7 +194,11 @@ for epigenome in all_epigenomes:
 			continue
 		ordered_bams.append(path)
 
+
 def process(bams):
+	# Takes a set of bams with the same epigenome, runs multicov, and outputs 
+	# results in an appropriate csv file.
+	
 	cmd = "bedtools multicov -bams " + " ".join(bams) + " -bed " + BED_PATH
 
 	output, error = subprocess.Popen(cmd.split(), 
@@ -213,7 +222,6 @@ def process(bams):
 				str(gene_array))
 			sys.exit()
 		gene = gene_array[0]
-
 		csv_lines = []
 		for j in range(4, len(section[0]), 5):
 			epigenome_index = (j - 4) / 5
@@ -229,20 +237,17 @@ def process(bams):
 				example_lines += "," + str(label) + "\n"
 				total_count += 1
 			csv_lines.append(example_lines.rstrip())
-
-		if gene in training_genes:
-			csv_dir = DATA_DIR + "data/training_data.csv"
-		elif gene in validation_genes:
-			csv_dir = DATA_DIR + "data/validation_data.csv"
-		elif gene in testing_genes:
-			csv_dir = DATA_DIR + "data/testing_data.csv"
-
-		with open(csv_dir, "a") as csv_file:
+		epigenome_names = [bam.split("/")[2].split("-")[0] for bam in bams]
+		if not all(epigenome_name == epigenome_names[0] for epigenome_name in epigenome_names):
+			print "ERROR: mismatching epigenome names: " + str(epigenome_names)
+		epigenome_name = epigenome_names[0]
+		with open(CSV_DIR + epigenome_name + "-" + gene + ".csv", "a") as csv_file:
 			csv_file.write("\n".join(csv_lines) + "\n")
 
 if args.provide_tagaligns:
 	# We assume that provided tagaligns are few enough to process all at once.
-	process(ordered_bams)
+	process(ordered_bams[0:5])
+	process(ordered_bams[5:10])
 else:
 	# Process bams in four chunks to not overload multicov.
 	quarter_length = len(ordered_bams) / 4
@@ -252,6 +257,24 @@ else:
 		bams = ordered_bams[i * quarter_length : i * quarter_length + quarter_length]
 		print " -- quarter_length: " + str(i)
 		process(bams)
+
+print "Done. Time elapsed: " + _time_elapsed()
+print "Concatenating CSVs..."
+
+for filename in os.listdir(CSV_DIR):
+	if not filename.endswith(".csv"):
+		continue
+	gene = filename.split("-")[1].split(".")[0]
+	if gene in training_genes:
+		csv_dir = DATA_DIR + "data/training_data.csv"
+	elif gene in validation_genes:
+		csv_dir = DATA_DIR + "data/validation_data.csv"
+	elif gene in testing_genes:
+		csv_dir = DATA_DIR + "data/testing_data.csv"
+
+	with open(csv_dir, "a") as final_csv:
+		with open(CSV_DIR + filename, "r") as intermediary_csv:
+			final_csv.write(intermediary_csv.read())
 
 print "Done. Time elapsed: " + _time_elapsed()
 print "Cleaning up..."
