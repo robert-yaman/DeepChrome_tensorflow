@@ -1,8 +1,9 @@
 # Script for generating a complete dataset. Takes a long time!
 
 import argparse
+import pybedtools
 import gzip
-import multiprocessesing as mult
+from multiprocessing import Pool
 import os
 import requests
 import time
@@ -198,7 +199,8 @@ for epigenome in all_epigenomes:
 def process(bams):
 	# Takes a set of bams with the same epigenome, runs multicov, and outputs 
 	# results in an appropriate csv file.
-	
+	print  " -- Starting new process for " + str(bams[0])
+
 	cmd = "bedtools multicov -bams " + " ".join(bams) + " -bed " + BED_PATH
 
 	output, error = subprocess.Popen(cmd.split(), 
@@ -244,19 +246,16 @@ def process(bams):
 		with open(CSV_DIR + epigenome_name + "-" + gene + ".csv", "a") as csv_file:
 			csv_file.write("\n".join(csv_lines) + "\n")
 
-if args.provide_tagaligns:
-	# We assume that provided tagaligns are few enough to process all at once.
-	process(ordered_bams[0:5])
-	process(ordered_bams[5:10])
-else:
-	# Process bams in four chunks to not overload multicov.
-	quarter_length = len(ordered_bams) / 4
-	if not len(ordered_bams) % 4 == 0:
-		print "ERROR: leaving out some bams."
-	for i in range(4):
-		bams = ordered_bams[i * quarter_length : i * quarter_length + quarter_length]
-		print " -- quarter_length: " + str(i)
-		process(bams)
+		print  " -- Ending process for " + str(bams[0])
+
+# This is costly, so run asynchronously on batches of 5.
+if not len(ordered_bams) % 5 == 0:
+	print "ERROR: incorrect number of bams: " + str(len(ordered_bams))
+num_pools = len(ordered_bams) / 5
+pool = Pool(processes=num_pools)
+bam_partitions = [ordered_bams[i*5 : i*5+5] for i in range(num_pools)]
+pool.map(process, bam_partitions)
+
 
 print "Done. Time elapsed: " + _time_elapsed()
 print "Concatenating CSVs..."
