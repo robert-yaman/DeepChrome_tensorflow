@@ -37,6 +37,7 @@ def main(args):
 			    step += 1
 			    print step
 			    ex, label = sess.run(next_element)
+			    print label
 			    _, s = sess.run([training_step, summary], 
 			    	feed_dict={x: ex, y: label, keep_prob: 0.5})
 			    # Log every step for now

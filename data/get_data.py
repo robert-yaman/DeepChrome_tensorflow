@@ -1,7 +1,6 @@
 # Script for generating a complete dataset. Takes a long time!
 
 import argparse
-import pybedtools
 import gzip
 from multiprocessing import Pool
 import os
