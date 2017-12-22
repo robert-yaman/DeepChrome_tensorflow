@@ -1,7 +1,6 @@
 # Script for generating a complete dataset. Takes a long time!
 
 import argparse
-import pybedtools
 import gzip
 from multiprocessing import Pool
 import os
@@ -246,16 +245,20 @@ def process(bams):
 		with open(CSV_DIR + epigenome_name + "-" + gene + ".csv", "a") as csv_file:
 			csv_file.write("\n".join(csv_lines) + "\n")
 
-		print  " -- Ending process for " + str(bams[0])
+                print " -- Ending process for " + str(bams[0]) + ". Time: " + _time_elapsed()
 
 # This is costly, so run asynchronously on batches of 5.
 if not len(ordered_bams) % 5 == 0:
-	print "ERROR: incorrect number of bams: " + str(len(ordered_bams))
-num_pools = len(ordered_bams) / 5
-pool = Pool(processes=num_pools)
-bam_partitions = [ordered_bams[i*5 : i*5+5] for i in range(num_pools)]
-pool.map(process, bam_partitions)
+	print "ERROR: incorrect number of bams: " + str(len(ordered_bams)) 
 
+num_procs = 14
+pool = Pool(processes=num_procs)
+bam_partitions = [ordered_bams[i*5 : i*5+5] for i in range(len(ordered_bams) / 5)]
+i = 0
+while i < len(bam_partitions):
+    current_bams = bam_partitions[i : min(i + num_procs, len(bam_partitions) - 1)]
+    pool.map(process, current_bams)
+    i += num_procs
 
 print "Done. Time elapsed: " + _time_elapsed()
 print "Concatenating CSVs..."
