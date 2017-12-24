@@ -5,8 +5,10 @@ import data
 import model
 
 def main(args):
-	next_element = data.get_data(args.train_files)
-	next_validation_element = data.get_data(args.eval_files)
+	next_element, _ = data.get_data(args.train_files, 
+		repeats=int(args.num_epochs))
+	next_validation_element, val_iterator = data.get_data(args.eval_files, 
+		initializable=True)
 
 	x = tf.placeholder(tf.float32, [100,5])
 	y = tf.placeholder(tf.float32)
@@ -21,9 +23,9 @@ def main(args):
 	# Try Adam optimizer?
 	training_step = tf.train.GradientDescentOptimizer(1e-3).minimize(loss)
 
-	# This seems wrong - we are analyzing as if both labels could be true.
-	auc, auc_update = tf.contrib.metrics.streaming_auc(predictions=softmax, 
-		labels=y, curve='ROC')
+	auc, auc_update = tf.contrib.metrics.streaming_auc(predictions=softmax[0], 
+		labels=y[0], curve='ROC')
+	tf.summary.scalar('auc', auc)
 
 	summary = tf.summary.merge_all()
 	with tf.Session() as sess:
@@ -31,35 +33,38 @@ def main(args):
 		summary_writer = tf.summary.FileWriter(args.job_dir, sess.graph)
 
 		sess.run(tf.global_variables_initializer())
+		sess.run(tf.local_variables_initializer()) 
 		step = 0
 		while True:
 			try:
-			    step += 1
-			    print step
-			    ex, label = sess.run(next_element)
-			    print label
-			    _, s = sess.run([training_step, summary], 
-			    	feed_dict={x: ex, y: label, keep_prob: 0.5})
-			    # Log every step for now
-			    summary_writer.add_summary(s, step)
-			except tf.errors.OutOfRangeError:
-			    print("DONE TRAINING")
-			    break
+				step += 1
+				print step
+				ex, label = sess.run(next_element)
+				_, s = sess.run([training_step, summary], 
+					feed_dict={x: ex, y: label, keep_prob: 0.5})
+				# Log every step for now
+				summary_writer.add_summary(s, step)
 
-		# Validate model
-		sess.run(tf.local_variables_initializer()) # AUC keeps local variables
 
-		while True:
-			try:
-				ex, label = sess.run(next_validation_element)
-				sess.run(auc_update, feed_dict={x: ex, y:label, keep_prob: 1})
+				# Validate model
+				if step % 1000 == 0:
+					# AUC keeps local variables. We reset local variables in 
+					# between validation batches.
+					sess.run(tf.local_variables_initializer()) 
+					sess.run(val_iterator.initializer)
+					while True:
+						try:
+							ex, label = sess.run(next_validation_element)
+							sess.run(auc_update, feed_dict={x: ex, y:label, 
+								keep_prob: 1})
+						except tf.errors.OutOfRangeError:
+							print("DONE VALIDATING")
+							print "CURRENT AUC:"
+							print sess.run(auc)
+							break
 			except tf.errors.OutOfRangeError:
-				print("DONE VALIDATING")
+				print("DONE TRAINING")
 				break
-
-		ending_auc = sess.run(auc)
-		print "AUC:"
-		print ending_auc
 
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser()
@@ -80,6 +85,10 @@ if __name__ == "__main__":
 		'--job-dir',
 		help='GCS location to write checkpoints, tensorboard, and models',
 		required=True
+	)
+	parser.add_argument(
+		'--num-epochs',
+		default=1,
 	)
 
 	main(parser.parse_args())

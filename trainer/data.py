@@ -1,6 +1,6 @@
 import tensorflow as tf
 
-def get_data(filepath):
+def get_data(filepath, repeats=1, initializable=False):
 	def decode_line(line):
 		items = tf.decode_csv(line, [[0]]*8)
 		return items[2:7], items[7]
@@ -13,8 +13,12 @@ def get_data(filepath):
 
 	base_dataset = tf.contrib.data.TextLineDataset(filepath)
 	tr_data = base_dataset.map(decode_line).batch(100).map(squash_labels)
-	iterator = tr_data.make_one_shot_iterator()
+	tr_data = tr_data.repeat(repeats)
+	if initializable:
+		iterator = tr_data.make_initializable_iterator()
+	else:
+		iterator = tr_data.make_one_shot_iterator()
 	next_element = iterator.get_next()
 
-	return next_element
+	return next_element, iterator
 

@@ -69,7 +69,7 @@ def get_model(x, keep_prob):
 	with tf.variable_scope('readout'):
 		# 2 outputs (mutually exclusive classification).
 		readout_weights = weight_variables([SECOND_FC_LAYER_NODE_COUNT, 2])
-		readout_biases = bias_variables([1])
+		readout_biases = bias_variables([2])
 		readout = tf.matmul(second_fc_layer, readout_weights) + readout_biases
 
 	return readout
