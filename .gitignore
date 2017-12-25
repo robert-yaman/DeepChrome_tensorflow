@@ -2,3 +2,4 @@ tmp_*
 data/*
 !data/get_data.py
 !data/README.md
+config.yaml

@@ -5,30 +5,34 @@ import data
 import model
 
 def main(args):
-	next_element, _ = data.get_data(args.train_files, 
-		repeats=int(args.num_epochs))
-	next_validation_element, val_iterator = data.get_data(args.eval_files, 
-		initializable=True)
+	with tf.device('/gpu:0'):
+		next_element, _ = data.get_data(args.train_files, 
+			repeats=int(args.num_epochs))
+		next_validation_element, val_iterator = data.get_data(args.eval_files, 
+			initializable=True)
 
-	x = tf.placeholder(tf.float32, [100,5])
-	y = tf.placeholder(tf.float32)
-	keep_prob = tf.placeholder(tf.float32)
+		x = tf.placeholder(tf.float32, [100,5])
+		y = tf.placeholder(tf.float32, [2])
+		keep_prob = tf.placeholder(tf.float32)
 
-	readout = model.get_model(x, keep_prob)
-	softmax = tf.nn.softmax(readout)
+		readout = model.get_model(x, keep_prob)
+		softmax = tf.nn.softmax(readout)
 
-	loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(labels=y, 
-		logits=readout))
-	tf.summary.scalar('loss', loss)
-	# Try Adam optimizer?
-	training_step = tf.train.GradientDescentOptimizer(1e-3).minimize(loss)
+		loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
+			labels=y, logits=readout))
+		tf.summary.scalar('loss', loss)
+		# Try Adam optimizer?
+		training_step = tf.train.GradientDescentOptimizer(1e-3).minimize(loss)
 
-	auc, auc_update = tf.contrib.metrics.streaming_auc(predictions=softmax[0], 
-		labels=y[0], curve='ROC')
-	tf.summary.scalar('auc', auc)
+		unary_prediction = tf.unstack(tf.squeeze(softmax))[0]
+		unary_label = tf.unstack(y)[0]
+		auc, auc_update = tf.contrib.metrics.streaming_auc(
+			predictions=unary_prediction, labels=unary_label, curve='ROC')
+		tf.summary.scalar('auc', auc)
 
-	summary = tf.summary.merge_all()
-	with tf.Session() as sess:
+		summary = tf.summary.merge_all()
+	with tf.Session(config=tf.ConfigProto(
+      allow_soft_placement=True, log_device_placement=True)) as sess:
 		print "BEGINNING TRANING..."
 		summary_writer = tf.summary.FileWriter(args.job_dir, sess.graph)
 
@@ -47,7 +51,7 @@ def main(args):
 
 
 				# Validate model
-				if step % 1000 == 0:
+				if step % int(args.validation_interval) == 0:
 					# AUC keeps local variables. We reset local variables in 
 					# between validation batches.
 					sess.run(tf.local_variables_initializer()) 
@@ -68,7 +72,7 @@ def main(args):
 
 if __name__ == "__main__":
 	parser = argparse.ArgumentParser()
-	# Input Arguments
+
 	parser.add_argument(
 		'--train-files',
 		help='GCS or local paths to training data',
@@ -89,6 +93,10 @@ if __name__ == "__main__":
 	parser.add_argument(
 		'--num-epochs',
 		default=1,
+	)
+	parser.add_argument(
+		'--validation-interval',
+		default=10000
 	)
 
 	main(parser.parse_args())
