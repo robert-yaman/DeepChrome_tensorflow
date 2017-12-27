@@ -21,8 +21,7 @@ def main(args):
 		loss = tf.reduce_mean(tf.nn.softmax_cross_entropy_with_logits(
 			labels=y, logits=readout))
 		tf.summary.scalar('loss', loss)
-		# Try Adam optimizer?
-		training_step = tf.train.GradientDescentOptimizer(1e-3).minimize(loss)
+		training_step = tf.train.AdamOptimizer(1e-3).minimize(loss)
 
 		unary_prediction = tf.unstack(tf.squeeze(softmax))[0]
 		unary_label = tf.unstack(y)[0]
@@ -30,7 +29,8 @@ def main(args):
 			predictions=unary_prediction, labels=unary_label, curve='ROC')
 		tf.summary.scalar('auc', auc)
 
-		summary = tf.summary.merge_all()
+	summary = tf.summary.merge_all()
+	saver = tf.train.Saver()
 	with tf.Session(config=tf.ConfigProto(
       allow_soft_placement=True, log_device_placement=True)) as sess:
 		print "BEGINNING TRANING..."
@@ -46,9 +46,6 @@ def main(args):
 				ex, label = sess.run(next_element)
 				_, s = sess.run([training_step, summary], 
 					feed_dict={x: ex, y: label, keep_prob: 0.5})
-				# Log every step for now
-				summary_writer.add_summary(s, step)
-
 
 				# Validate model
 				if step % int(args.validation_interval) == 0:
@@ -63,9 +60,13 @@ def main(args):
 								keep_prob: 1})
 						except tf.errors.OutOfRangeError:
 							print("DONE VALIDATING")
-							print "CURRENT AUC:"
-							print sess.run(auc)
+							print "CURRENT AUC:" + str(sess.run(auc))
 							break
+					print "SAVING CHECKPOINT"
+					saver.save(sess, args.job_dir + "/checkpoints/", 
+						global_step=step)
+				# Log every step for now
+				summary_writer.add_summary(s, step)
 			except tf.errors.OutOfRangeError:
 				print("DONE TRAINING")
 				break
