@@ -1,7 +1,5 @@
 # Using CNNs to model affect of histone modification on gene expression
 
-WORK IN PROGRESS
-
 Here I implement the CNN described in [DeepChrome: Deep-learning for predicting gene expression from histone modifications](https://academic.oup.com/bioinformatics/article/32/17/i639/2450757) in tensorflow.
 
 This project uses ChIp-Seq data from REMC to identify histone modifications on a set of human epigenomes, and correlates it with RNA-seq gene expression data from the same epigenomes. The goal is to model the effect of the histone modifcations on the expression levels of their respective genes. We do this by constructing 100 bins of 100 base pairs around the TSS of each gene. We then use these collections of bins as matrices on which to run a convolutional neural network. The convolutions in this network aim to discover long-range structure in the histone modifications. We frame the problem as a binary classifaction problem: either genes have above median expression, or below median expression.
