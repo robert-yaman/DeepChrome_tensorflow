@@ -36,33 +36,36 @@ def get_model(x, keep_prob):
 			return variables
 
 	with tf.name_scope('initialize'):
-	    # Add a |batch| anc |channel| dimension for convolution.
+	    # Add a |channel| dimension for convolution.
 	    ## TODO: double check tf.transpose is what we want.
-		example = tf.expand_dims(tf.transpose(x), [-1])
-		example_4d = tf.expand_dims(example, [0])
+		example_4d = tf.expand_dims(x, [-1])
 
 	with tf.variable_scope('conv'):
+		# NOTE: don't need to take into account batch size here.
 		conv_weights = weight_variables([5, CONV_FILTER_SIZE, 1, NUM_CONV_FILTERS])
 		conv_biases = bias_variables([NUM_CONV_FILTERS])
 
-		conv = tf.nn.conv2d(example_4d, conv_weights, strides=[1,1,1,1] ,padding='VALID')
+		conv = tf.nn.conv2d(example_4d, conv_weights, 
+			strides=[1,1,1,1] ,padding='VALID')
 		conv_relu = tf.nn.relu(conv + conv_biases)
 		pool = tf.nn.pool(conv_relu, window_shape=[1,POOLING_SIZE], 
 			pooling_type='MAX', padding='VALID', strides=[1,POOLING_SIZE])
 
 	with tf.variable_scope('dropout'):
 		total_nodes = ((EXAMPLE_WIDTH - CONV_FILTER_SIZE) / POOLING_SIZE) * NUM_CONV_FILTERS
-		pool_flat = tf.reshape(pool, [1, total_nodes])
+		pool_flat = tf.reshape(pool, [-1, total_nodes])
 
 		dropout_layer = tf.nn.dropout(pool_flat, keep_prob)
 
 	with tf.variable_scope('first_fc_layer'):
-		first_fc_weights = weight_variables([total_nodes, FIRST_FC_LAYER_NODE_COUNT])
+		first_fc_weights = weight_variables([total_nodes, 
+			FIRST_FC_LAYER_NODE_COUNT])
 		first_fc_biases = bias_variables([FIRST_FC_LAYER_NODE_COUNT])
 		first_fc_layer = tf.nn.relu(tf.matmul(dropout_layer, first_fc_weights) + first_fc_biases)
 
 	with tf.variable_scope('second_fc_layer'):
-		second_fc_weights = weight_variables([FIRST_FC_LAYER_NODE_COUNT, SECOND_FC_LAYER_NODE_COUNT])
+		second_fc_weights = weight_variables([FIRST_FC_LAYER_NODE_COUNT,
+			SECOND_FC_LAYER_NODE_COUNT])
 		second_fc_biases = bias_variables([SECOND_FC_LAYER_NODE_COUNT])
 		second_fc_layer = tf.nn.relu(tf.matmul(first_fc_layer, second_fc_weights) + second_fc_biases)
 
