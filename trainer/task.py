@@ -69,6 +69,11 @@ def main(args):
 				summary_writer.add_summary(s, step)
 			except tf.errors.OutOfRangeError:
 				print("DONE TRAINING")
+				print "SAVING MODEL"
+				builder = tf.saved_model.builder.SavedModelBuilder(
+					args.job_dir + "/model/")
+				builder.add_meta_graph_and_variables(sess,
+					[tf.saved_model.tag_constants.TRAINING])
 				break
 
 if __name__ == "__main__":
