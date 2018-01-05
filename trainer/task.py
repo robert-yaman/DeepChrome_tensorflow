@@ -5,15 +5,15 @@ import data
 import model
 
 def main(args):
+	x = tf.placeholder(tf.float32, [None, 5, 100])
+	y = tf.placeholder(tf.float32, [None, 2])
+	keep_prob = tf.placeholder(tf.float32)
+
 	with tf.device('/gpu:0'):
 		next_element, _ = data.get_data(args.train_files, 
 			repeats=args.num_epochs, batch_size=args.batch_size)
 		next_validation_element, val_iterator = data.get_data(args.eval_files, 
 			initializable=True, batch_size=args.batch_size)
-
-		x = tf.placeholder(tf.float32, [None, 5, 100])
-		y = tf.placeholder(tf.float32, [None, 2])
-		keep_prob = tf.placeholder(tf.float32)
 
 		readout = model.get_model(x, keep_prob)
 		softmax = tf.nn.softmax(readout)

@@ -25,6 +25,3 @@ This script will use data from the provided paths, and put all output in the job
 
 Ritambhara Singh, Jack Lanchantin, Gabriel Robins, Yanjun Qi; [DeepChrome: deep-learning for predicting gene expression from histone modifications](https://doi.org/10.1093/bioinformatics/btw427), Bioinformatics, Volume 32, Issue 17, 1 September 2016, Pages i639–i648, 
 
-# TODOS
-
-- Don't hardcode batch size into model.
